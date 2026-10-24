@@ -1,0 +1,16 @@
+{
+  "name": "studio-workflows",
+  "version": "0.1.0",
+  "description": "Build agentic workflows locally as Claude Code projects, try them with `studio workflows dev`, and deploy them to Studio, which runs them on schedules, webhooks or by hand.",
+  "author": {
+    "name": "MakeMore Digital"
+  },
+  "homepage": "https://github.com/makemore/foundry-workflow-runner",
+  "keywords": [
+    "studio",
+    "workflows",
+    "automation",
+    "deploy"
+  ],
+  "license": "Apache-2.0"
+}

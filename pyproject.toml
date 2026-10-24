@@ -1,0 +1,22 @@
+[project]
+name = "foundry-workflow-runner"
+version = "0.1.0"
+description = "Runs Claude Code projects and scripts as workflows (studio.yaml), on your own computer or for a host"
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.scripts]
+foundry-workflow-runner = "foundry_workflow_runner.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

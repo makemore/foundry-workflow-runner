@@ -1,0 +1,70 @@
+{
+  "about": "Workflow egress tokens (docs/PROTOCOL.md, \"Egress tokens\"). token = base64url(payload) + '.' + base64url(HMAC-SHA256(key, payload segment as ASCII)); base64url without '=' padding; payload = compact JSON (separators ',' ':', no spaces) with keys in the order r, h, x; key = UTF-8 bytes of WORKFLOW_EGRESS_KEY stripped of surrounding whitespace. A token is valid while now < x. Test keys only: never real secrets.",
+  "key": "workflow-egress-test-key-not-a-real-secret-0001",
+  "now": 1800000000,
+  "vectors": [
+    {
+      "name": "run",
+      "run": "wfr_7Kq2mN9xT4",
+      "hosts": [
+        "studio.example.com",
+        "api.anthropic.com",
+        "storage.googleapis.com",
+        "*.xero.com"
+      ],
+      "x": 1800003900,
+      "token": "eyJyIjoid2ZyXzdLcTJtTjl4VDQiLCJoIjpbInN0dWRpby5leGFtcGxlLmNvbSIsImFwaS5hbnRocm9waWMuY29tIiwic3RvcmFnZS5nb29nbGVhcGlzLmNvbSIsIioueGVyby5jb20iXSwieCI6MTgwMDAwMzkwMH0.i_ld0VCqyBjXhVt6Ohkf1yHjVHDj1brsdE2QPjWKHqk",
+      "valid": true
+    },
+    {
+      "name": "build",
+      "run": "wfr_build0001",
+      "hosts": [
+        "host.example.net",
+        "api.anthropic.com",
+        "storage.googleapis.com",
+        "pypi.org",
+        "files.pythonhosted.org",
+        "registry.npmjs.org"
+      ],
+      "x": 1800000600,
+      "token": "eyJyIjoid2ZyX2J1aWxkMDAwMSIsImgiOlsiaG9zdC5leGFtcGxlLm5ldCIsImFwaS5hbnRocm9waWMuY29tIiwic3RvcmFnZS5nb29nbGVhcGlzLmNvbSIsInB5cGkub3JnIiwiZmlsZXMucHl0aG9uaG9zdGVkLm9yZyIsInJlZ2lzdHJ5Lm5wbWpzLm9yZyJdLCJ4IjoxODAwMDAwNjAwfQ.PsPOuPfYkYK5SdM7T4mxvxpz0Q_3eqhBdb7Hpx4h1XQ",
+      "valid": true
+    },
+    {
+      "name": "expired_at_x",
+      "run": "wfr_7Kq2mN9xT4",
+      "hosts": [
+        "studio.example.com",
+        "api.anthropic.com",
+        "storage.googleapis.com",
+        "*.xero.com"
+      ],
+      "x": 1800000000,
+      "token": "eyJyIjoid2ZyXzdLcTJtTjl4VDQiLCJoIjpbInN0dWRpby5leGFtcGxlLmNvbSIsImFwaS5hbnRocm9waWMuY29tIiwic3RvcmFnZS5nb29nbGVhcGlzLmNvbSIsIioueGVyby5jb20iXSwieCI6MTgwMDAwMDAwMH0.GTZhAM-0-q_MESanhHTi-M5ZksWuoJ7YNZGsTX5hmZ8",
+      "valid": false,
+      "error": "expired"
+    },
+    {
+      "name": "other_key",
+      "run": "wfr_7Kq2mN9xT4",
+      "hosts": [
+        "studio.example.com",
+        "api.anthropic.com",
+        "storage.googleapis.com",
+        "*.xero.com"
+      ],
+      "x": 1800003900,
+      "token": "eyJyIjoid2ZyXzdLcTJtTjl4VDQiLCJoIjpbInN0dWRpby5leGFtcGxlLmNvbSIsImFwaS5hbnRocm9waWMuY29tIiwic3RvcmFnZS5nb29nbGVhcGlzLmNvbSIsIioueGVyby5jb20iXSwieCI6MTgwMDAwMzkwMH0.bpabXhkidv00hLB8yDnHl_T8bTVuqITQ4tBrD3KJvp0",
+      "valid": false,
+      "error": "bad_signature",
+      "signed_with": "workflow-egress-test-key-not-a-real-secret-0002"
+    },
+    {
+      "name": "payload_tampered",
+      "token": "eyJyIjoid2ZyXzdLcTJtTjl4VDQiLCJoIjpbInN0dWRpby5leGFtcGxlLmNvbSIsImFwaS5hbnRocm9waWMuY29tIiwic3RvcmFnZS5nb29nbGVhcGlzLmNvbSIsIioueGVyby5jb20iLCIqLmV2aWwuZXhhbXBsZSJdLCJ4IjoxODAwMDAzOTAwfQ.i_ld0VCqyBjXhVt6Ohkf1yHjVHDj1brsdE2QPjWKHqk",
+      "valid": false,
+      "error": "bad_signature"
+    }
+  ]
+}

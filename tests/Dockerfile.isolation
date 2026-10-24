@@ -1,0 +1,22 @@
+# The user-separation tests (scripts/test-docker.sh isolation): the runner image's users, directories,
+# start.py and privcheck.py, with the runner installed the way the image installs it, but no Node.js or
+# Claude Code (a fake `claude` stands in). Runs as root, as the image does.
+ARG PYTHON=3.12
+FROM python:${PYTHON}-slim
+RUN pip install --no-cache-dir --disable-pip-version-check pytest==8.3.4 \
+    && groupadd --gid 10010 workspace \
+    && groupadd --gid 10001 runner \
+    && useradd --uid 10001 --gid runner --groups workspace --home-dir /home/runner --create-home \
+         --shell /usr/sbin/nologin runner \
+    && useradd --uid 10002 --gid workspace --home-dir /home/workload --create-home --shell /bin/bash workload \
+    && chmod 0700 /home/runner \
+    && chown workload:workspace /home/workload && chmod 2770 /home/workload \
+    && mkdir -p /workspace && chown runner:workspace /workspace && chmod 2770 /workspace
+COPY pyproject.toml README.md LICENSE NOTICE /tmp/runner-src/
+COPY src/ /tmp/runner-src/src/
+RUN python -m venv /opt/workflow-runner \
+    && /opt/workflow-runner/bin/pip install --no-cache-dir --disable-pip-version-check /tmp/runner-src \
+    && rm -rf /tmp/runner-src
+COPY image/start.py image/privcheck.py image/egress_probe.py /opt/workflow-runner/
+ENV PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=/src/src
+WORKDIR /src

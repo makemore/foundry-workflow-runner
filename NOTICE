@@ -1,0 +1,5 @@
+foundry-workflow-runner
+Copyright 2026 MakeMore Digital
+
+Licensed under the Apache License, Version 2.0 (LICENSE). The runner image you can build from
+image/Dockerfile contains third-party software under its own terms; see LICENCES.md.

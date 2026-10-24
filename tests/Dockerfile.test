@@ -1,0 +1,8 @@
+# The runner's tests in a local, offline container (scripts/test-docker.sh). PYTHON picks the interpreter
+# (3.10 is the runner's floor).
+ARG PYTHON=3.12
+FROM python:${PYTHON}-slim
+RUN pip install --no-cache-dir --disable-pip-version-check pytest==8.3.4 && useradd -m tester
+USER tester
+ENV PYTHONDONTWRITEBYTECODE=1 PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 PYTHONPATH=/src/src
+WORKDIR /src
