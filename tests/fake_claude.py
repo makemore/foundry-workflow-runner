@@ -197,8 +197,18 @@ def main():
             runner_env = "unreadable"
         token_here = any(key == "STUDIO_RUN_TOKEN" for key in os.environ)
         status, _, text = model_call()
+        # Claude Code's workspace trust for this directory, from its global config in this user's home.
+        trust = "none"
+        try:
+            config = os.path.join(os.environ["HOME"], ".claude.json")
+            info = os.lstat(config)
+            with open(config) as handle:
+                entry = json.load(handle)["projects"][os.getcwd()]
+            trust = f"{entry['hasTrustDialogAccepted']}:{info.st_uid}:{info.st_mode & 0o777:o}"
+        except (OSError, KeyError, ValueError, TypeError):
+            pass
         result = f"uid={os.getuid()} gid={os.getgid()} runner_environ={runner_env} token_in_env={token_here} " \
-                 f"llm={status}:{text}"
+                 f"llm={status}:{text} trust={trust}"
     elif scenario == "denied_by_person":
         decision = tool_call(permission, "toolu_5", "mcp__studio__gmail_send", {"to": "a@example.com"}, "sent")
         result = f"send: {decision['behavior']}"

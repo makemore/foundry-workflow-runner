@@ -2,8 +2,11 @@
 # Builds the runner image (image/Dockerfile; this installs Claude Code from npm under your acceptance of
 # Anthropic's terms) and checks it in local Docker with no network: the pinned tools answer, the
 # directories and users are right, foundry_workflow_runner imports, and the privilege drop (privcheck.py).
+# Then the real Claude Code, run through start.py against a fake model, must apply the project's own
+# .claude/settings.json (the runner trusts /workspace for the workload user): image/checks/trust_check.sh.
 # The runner's own behaviour is tested by scripts/test-docker.sh. Usage (from anywhere):
 #   scripts/check-image.sh             # the checks
+#   scripts/check-image.sh trust       # only the Claude Code trust check
 #   scripts/check-image.sh licences    # installed Debian, npm and Python packages + licences
 set -euo pipefail
 
@@ -15,6 +18,17 @@ docker build -q -f "$root/image/Dockerfile" -t "$image" "$root" >/dev/null
 # Docker's default capabilities for root; start.py keeps only CAP_SETUID/CAP_SETGID of them.
 run=(docker run --rm --name "$name" --network none --security-opt no-new-privileges
      --entrypoint /bin/bash "$image")
+
+trust_check() {
+    echo "--- Claude Code in the image applies the project's settings (real Claude Code, fake model, offline)"
+    docker run --rm --name "$name-trust" --network none --security-opt no-new-privileges \
+        -v "$root/image/checks:/checks:ro" --entrypoint /bin/bash "$image" /checks/trust_check.sh
+}
+
+if [[ "${1:-}" == trust ]]; then
+    trust_check
+    exit
+fi
 
 if [[ "${1:-}" == licences ]]; then
     exec "${run[@]}" -c '
@@ -73,4 +87,5 @@ status=$?
 echo "--- privcheck with only CHOWN, FOWNER, SETUID, SETGID"
 docker run --rm --network none --cap-drop ALL --cap-add CHOWN --cap-add FOWNER --cap-add SETUID --cap-add SETGID \
     --security-opt no-new-privileges "$image" /opt/workflow-runner/bin/python -I /opt/workflow-runner/privcheck.py || status=1
+trust_check || status=1
 exit $status

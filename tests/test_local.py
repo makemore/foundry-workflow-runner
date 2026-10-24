@@ -120,6 +120,15 @@ def test_a_claude_code_workflow_runs_here_with_your_key_kept_from_it(tmp_path, c
     assert USER_KEY not in done.stdout + done.stderr and "xero-local-value-789" not in done.stdout
 
 
+def test_a_standalone_run_never_changes_your_claude_config_but_says_how_to_trust_the_project(tmp_path, claude_bin,
+                                                                                            upstream):
+    root = workflow(tmp_path, "version: 1\nname: receipts\nentry:\n  claude: basic\n")
+    done = runner("run", root, env=environment(tmp_path, claude_bin, upstream))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "hasn't trusted this project's directory" in done.stdout and "open the directory once" in done.stdout
+    assert not (tmp_path / ".claude.json").exists()
+
+
 def test_approvals_are_refused_when_non_interactive(tmp_path, claude_bin, upstream):
     root = workflow(tmp_path, 'version: 1\nname: pusher\nentry:\n  claude: approval\n'
                               'approvals:\n  ask: ["Bash(git push:*)"]\n')

@@ -78,7 +78,10 @@ There is nobody at a terminal, so every tool call is decided by rules:
 - Everything else is denied with "not allowed in cloud runs; add it to permissions.allow or
   approvals.ask". Fix it in one of those two places, not by asking for broader permissions.
 
-`.claude/settings.local.json` isn't packaged, and runs never use bypass-permissions mode.
+`.claude/settings.local.json` isn't packaged, and runs never use bypass-permissions mode. Cloud runs trust
+the project's directory for Claude Code, so its `.claude/settings.json` (rules and hooks) applies there. A run
+on this computer leaves the person's `~/.claude.json` alone: if Claude Code hasn't trusted the project yet, the
+run says so, and opening the project once in Claude Code fixes it.
 
 ## Secrets: never in files
 

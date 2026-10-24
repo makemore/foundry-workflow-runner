@@ -30,6 +30,10 @@ foundry-workflow-runner run ./project [--trigger manual|cron|webhook] [--payload
 - **Approvals.** Tool calls matching `approvals.ask` are asked at this terminal (`--non-interactive` refuses them
   all). Anything else not allowed by the project's own `.claude/settings.json` is denied: there is nobody at
   Claude Code's prompt.
+- **Trust.** Claude Code applies the project's own `.claude/settings.json` only in a directory you have trusted
+  in it. The runner never changes your `~/.claude.json`: if the project isn't trusted, the run says so; open it
+  once in Claude Code and accept the trust prompt. In the image (and on a host) the runner trusts `/workspace`
+  for the workload user itself ([docs/SECURITY.md](docs/SECURITY.md#claude-codes-workspace-trust)).
 - **State** (`state:` in studio.yaml) stays where it is in the project; the project runs in place.
 - **Egress.** No proxy unless you pass `--proxy`; then it is the workflow's only way out.
 - **Triggers.** There's no scheduler here: run it from your own cron, CI or webhook handler, with `--trigger`
@@ -47,7 +51,8 @@ Code from npm under your own acceptance of Anthropic's terms:
 docker build -f image/Dockerfile -t foundry-workflow-runner .
 docker run --rm -it -e ANTHROPIC_API_KEY -v "$PWD/project:/workspace" foundry-workflow-runner \
     /opt/workflow-runner/bin/python -I /opt/workflow-runner/start.py run /workspace
-scripts/check-image.sh            # the pinned tools, the privilege drop (privcheck.py), with no network
+scripts/check-image.sh            # the pinned tools, the privilege drop (privcheck.py), and the real Claude
+                                  # Code applying the project's settings (fake model), with no network
 ```
 
 Inside, `start.py` drops from root to the runner (uid 10001, keeping only CAP_SETUID/CAP_SETGID), which runs

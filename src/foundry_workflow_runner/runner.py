@@ -31,7 +31,7 @@ import tempfile
 import threading
 import time
 
-from . import RUNNER_VERSION
+from . import RUNNER_VERSION, trust
 from .events import EventSink, Heartbeat, StreamJson
 from .isolation import Identity, IsolationError
 from .permissions import Broker, LocalBridge
@@ -58,6 +58,11 @@ _DURATION = re.compile(r"^([1-9][0-9]{0,5})([smh]?)$")
 HERE = os.path.dirname(os.path.abspath(__file__))
 MCP_SERVER = os.path.join(HERE, "mcp_server.py")
 ARCHIVE_TOOL = os.path.join(HERE, "archive.py")
+TRUST_TOOL = os.path.join(HERE, "trust.py")
+UNTRUSTED_NOTE = ("Claude Code hasn't trusted this project's directory for your user, so it will ignore the project's "
+                  "own .claude/settings.json (permission rules, hooks). To trust it, open the directory once in "
+                  "Claude Code (run `claude` there and accept the trust prompt), then run again. The runner doesn't "
+                  "change your own ~/.claude.json.")
 
 
 class Failure(Exception):
@@ -529,6 +534,7 @@ class Runner:
                         self.sink.emit("text", text=line)
             else:
                 raise Failure("bad_entry", "The workflow has no entry to run.")
+            self._trust_project(env, claude="claude" in entry)
             self.sink.emit("note", text="Running " + ("Claude Code." if "claude" in entry else "the command."))
             self.process = Process(argv, identity=self.identity, cwd=self.workdir, env=env, on_line=on_line,
                                    redact=self.redact)
@@ -558,6 +564,28 @@ class Runner:
         self._emit_tail()
         return {"status": "failed", "error_code": "exit_code", "exit_code": code,
                 "summary": f"The command exited with {code}."}
+
+    def _trust_project(self, env, *, claude):
+        """Claude Code applies the project's own settings only in a trusted directory (trust.py). Isolated, the
+        workload's home is the run's own: mark exactly the working directory as trusted there, as the workload
+        user. On one user's own computer, never change their config; say how to trust it instead."""
+        if self.identity.isolated:
+            if not self.home:
+                return
+            tool_env = self._tool_env()
+            if env.get("CLAUDE_CONFIG_DIR"):
+                tool_env["CLAUDE_CONFIG_DIR"] = env["CLAUDE_CONFIG_DIR"]
+            process = Process([sys.executable, "-I", TRUST_TOOL, "mark", os.path.realpath(self.workdir)],
+                              identity=self.identity, cwd=self.shared, env=tool_env, on_line=None,
+                              redact=self.redact)
+            code, reason = process.wait(cancelled=self.cancelled, deadline=self.deadline, grace=self.times["grace"])
+            if reason != "exit":
+                self._check()
+            if code != 0:
+                self.sink.emit("note", text="The project couldn't be marked as trusted for Claude Code, so its own "
+                                            ".claude/settings.json won't apply.")
+        elif claude and not trust.trusted(self.workdir, env):
+            self.sink.emit("note", text=UNTRUSTED_NOTE)
 
     def _emit_tail(self):
         for line in list(self.process.tail)[-20:]:

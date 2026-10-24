@@ -546,6 +546,89 @@ def test_without_a_workload_proxy_the_workflow_has_no_egress(studio, claude_bin,
         runner_proxy.close()
 
 
+def test_one_user_runs_leave_your_claude_config_alone_and_say_how_to_trust_the_project(studio, claude_bin,
+                                                                                       tmp_path):
+    workdir = project(tmp_path, {"permissions": {"allow": ["Bash(ls:*)"]}})
+    run, url = studio.add_run(spec())
+    code, out, err = run_runner(url, run, workdir, claude_bin, tmp_path)
+    assert code == 0, out + err
+    assert not (tmp_path / ".claude.json").exists() and not (tmp_path / ".claude").exists()
+    notes = [event.get("text") or "" for event in run.ordered_events() if event["type"] == "note"]
+    assert any("hasn't trusted this project's directory" in note and "doesn't change your own ~/.claude.json" in note
+               for note in notes), notes
+
+
+def test_one_user_runs_in_a_trusted_project_say_nothing_and_change_nothing(studio, claude_bin, tmp_path):
+    workdir = project(tmp_path, {"permissions": {"allow": ["Bash(ls:*)"]}})
+    config = tmp_path / ".claude.json"  # HOME is tmp_path: a parent of the project is trusted.
+    config.write_text(json.dumps({"numStartups": 3, "projects": {
+        str(tmp_path.resolve()): {"hasTrustDialogAccepted": True, "allowedTools": []}}}))
+    before = config.read_bytes()
+    run, url = studio.add_run(spec())
+    code, out, err = run_runner(url, run, workdir, claude_bin, tmp_path)
+    assert code == 0, out + err
+    assert config.read_bytes() == before
+    assert not any("trusted" in (event.get("text") or "") for event in run.ordered_events())
+
+
+def test_trust_marks_exactly_the_directory_and_keeps_the_rest_of_the_config(tmp_path):
+    from foundry_workflow_runner import trust
+
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".claude.json").write_text(json.dumps({"theme": "dark", "projects": {
+        "/workspace": {"allowedTools": ["Bash"]}, "/elsewhere": {"hasTrustDialogAccepted": False}}}))
+    trust.mark("/workspace", {"HOME": str(home)})
+    config = json.loads((home / ".claude.json").read_text())
+    assert config["theme"] == "dark"
+    assert config["projects"] == {"/workspace": {"allowedTools": ["Bash"], "hasTrustDialogAccepted": True},
+                                  "/elsewhere": {"hasTrustDialogAccepted": False}}
+    assert (home / ".claude.json").stat().st_mode & 0o777 == 0o600
+    assert trust.trusted("/workspace", {"HOME": str(home)}) and not trust.trusted("/elsewhere", {"HOME": str(home)})
+    # A fresh home gets a config with just that; CLAUDE_CONFIG_DIR wins over HOME, as in Claude Code.
+    fresh = tmp_path / "fresh"
+    trust.mark("/workspace", {"HOME": str(home), "CLAUDE_CONFIG_DIR": str(fresh)})
+    assert json.loads((fresh / ".claude.json").read_text()) == {"projects": {"/workspace": {
+        "hasTrustDialogAccepted": True}}}
+
+
+def test_trust_refuses_a_linked_or_malformed_config(tmp_path):
+    from foundry_workflow_runner import trust
+
+    target = tmp_path / "target.json"
+    target.write_text("{}")
+    linked = tmp_path / "linked"
+    linked.mkdir()
+    (linked / ".claude.json").symlink_to(target)
+    with pytest.raises(OSError):
+        trust.mark("/workspace", {"HOME": str(linked)})
+    assert target.read_text() == "{}"
+    broken = tmp_path / "broken"
+    broken.mkdir()
+    (broken / ".claude.json").write_text("[1, 2]")
+    with pytest.raises(ValueError):
+        trust.mark("/workspace", {"HOME": str(broken)})
+    assert (broken / ".claude.json").read_text() == "[1, 2]"
+
+
+def test_trust_counts_a_trusted_parent_only_up_to_the_git_root(tmp_path):
+    from foundry_workflow_runner import trust
+
+    repo = tmp_path / "outer" / "repo"
+    (repo / "sub").mkdir(parents=True)
+    (repo / ".git").mkdir()
+    home = tmp_path / "home"
+    home.mkdir()
+    environ = {"HOME": str(home)}
+    (home / ".claude.json").write_text(json.dumps({"projects": {
+        str((tmp_path / "outer").resolve()): {"hasTrustDialogAccepted": True}}}))
+    assert not trust.trusted(str(repo / "sub"), environ)  # Above the git root: doesn't count.
+    (home / ".claude.json").write_text(json.dumps({"projects": {
+        str(repo.resolve()): {"hasTrustDialogAccepted": True}}}))
+    assert trust.trusted(str(repo / "sub"), environ) and trust.trusted(str(repo), environ)
+    assert not trust.trusted(str(tmp_path), environ)
+
+
 ISOLATED = pytest.mark.skipif(os.geteuid() != 0, reason="needs root (scripts/test-docker.sh isolation)")
 
 
@@ -572,6 +655,9 @@ def test_isolated_the_workflow_runs_as_its_own_user_and_cant_read_the_runner(stu
     summary = run.finished["summary"]
     assert "uid=10002 gid=10002" in summary and "runner_environ=unreadable" in summary
     assert "token_in_env=False" in summary and "llm=200:Hello from the relay." in summary
+    # Claude Code trusts exactly the working directory, in the workload's own home (its file, 0600); the
+    # runner's HOME is left alone.
+    assert "trust=True:10002:600" in summary and not os.path.exists(os.path.join(base, ".claude.json"))
     assert os.stat(os.path.join(base, "workspace")).st_uid == 10002
     assert run.token not in process.stdout + process.stderr
 
@@ -689,6 +775,7 @@ def test_through_the_images_start_py_the_workflow_is_the_workload_user(studio):
         assert "uid=10002 gid=10010" in summary and "runner_environ=unreadable" in summary
         assert "token_in_env=False" in summary and "llm=200:Hello from the relay." in summary
         assert os.stat("/workspace/studio.yaml").st_uid == 10002  # Unpacked by the workload, not the runner.
+        assert "trust=True:10002:600" in summary and not os.path.exists("/home/runner/.claude.json")
         assert run.token not in process.stdout + process.stderr and runner_proxy.seen == []
     finally:
         runner_proxy.close()

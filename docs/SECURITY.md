@@ -40,6 +40,26 @@ Started as root without `start.py`, the runner does the same with a saved uid of
 (`foundry-workflow-runner run`) everything is one user, which only `STUDIO_RUNNER_SHARED_UID=1` (set by `run`)
 allows. That user is you, with your own files.
 
+## Claude Code's workspace trust
+
+Claude Code applies a project's own `.claude/settings.json` (its `permissions` rules, hooks and other
+project-scoped settings) only in a directory it trusts. It records trust in its global config,
+`~/.claude.json`, as `projects["<directory>"].hasTrustDialogAccepted`.
+
+- **Isolated runs** (the runner image, or the runner started as root). Before the entry starts, the runner
+  marks exactly the working directory (`/workspace` in the image) as trusted in the workload user's own
+  `~/.claude.json` (in the image, `/home/workload/.claude.json`, the workload's file, mode 0600). It does that
+  as the workload user (`trust.py`), refuses a config that is a link, and keeps whatever else is in it. It never
+  touches the runner's home. This is the intended contract: inside the run's isolated container, the
+  workflow author's own settings, hooks and permission rules apply to Claude Code, as they would on the author's
+  computer. They are the author's code, and run as the workload user with nothing the runner holds. The
+  runner's limits still apply on top: `approvals.ask` rules reach the permission tool (ask rules win over
+  allow rules), the egress proxy decides what leaves the run, and the runner never uses `bypassPermissions`.
+- **On your own computer** (`foundry-workflow-runner run`, one user). `~/.claude.json` is yours, so the runner
+  never changes it. If Claude Code wouldn't trust the project, the run prints a notice saying so: open the
+  directory once in Claude Code and accept the trust prompt. Until then, Claude Code ignores the project's
+  settings, and calls they would have allowed go to the runner's permission tool instead.
+
 ## The loopback relay
 
 The relay listens on `127.0.0.1` under an unguessable per-run path secret. It forwards exactly
