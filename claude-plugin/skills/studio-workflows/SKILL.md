@@ -76,7 +76,9 @@ There is nobody at a terminal, so every tool call is decided by rules:
 - Calls allowed by the project's own `.claude/settings.json` `permissions.allow` run.
 - Tools of the run's `studio` MCP server (the declared `connections`) run; Studio applies its own checks.
 - Everything else is denied with "not allowed in cloud runs; add it to permissions.allow or
-  approvals.ask". Fix it in one of those two places, not by asking for broader permissions.
+  approvals.ask". Fix it in one of those two places, not by asking for broader permissions. WebFetch and
+  WebSearch are denied with "no internet in cloud runs except the hosts the workflow allows": list the host
+  in `egress` and allow `WebFetch(domain:host)`, or fetch from the shell through the egress proxy.
 
 `.claude/settings.local.json` isn't packaged, and runs never use bypass-permissions mode. Cloud runs trust
 the project's directory for Claude Code, so its `.claude/settings.json` (rules and hooks) applies there. A run

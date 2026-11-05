@@ -8,7 +8,8 @@ rules win over allow rules, so every call matching one reaches the tool even whe
    for those itself, and refuses them at ``approvals/``;
 2. matches ``approvals.ask`` → the host's approval (stored as ``runner:<tool>``); allowed once a person approves;
 3. allowed by the project's own ``.claude/settings.json`` ``permissions.allow`` → allowed;
-4. anything else → denied: "not allowed in cloud runs; add it to permissions.allow or approvals.ask".
+4. anything else → denied: "not allowed in cloud runs; add it to permissions.allow or approvals.ask"
+   (WebFetch and WebSearch: "no internet in cloud runs except the hosts the workflow allows").
 
 Rule syntax (the subset Claude Code documents): ``Tool``, ``mcp__server`` / ``mcp__server__*`` /
 ``mcp__server__tool``, ``Bash(prefix:*)``, ``Bash(glob with *)``, ``Bash(exact)``, ``Read|Edit|Write(path glob)``
@@ -30,6 +31,16 @@ from .protocol import ProtocolError
 
 EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 DENY_SUFFIX = "is not allowed in cloud runs; add it to permissions.allow or approvals.ask."
+# Tools that reach the internet. Denied, they say why in the run's own terms: the run has no internet except the
+# manifest's egress hosts (the egress proxy refuses every other host whatever the permission rules say).
+NETWORK_TOOLS = ("WebFetch", "WebSearch")
+NO_INTERNET = "no internet in cloud runs except the hosts the workflow allows"
+NETWORK_DENY = {
+    "WebFetch": (f"WebFetch is not allowed here: {NO_INTERNET} (studio.yaml egress, with "
+                 "WebFetch(domain:host) in permissions.allow). Work without it, or fetch only from those hosts."),
+    "WebSearch": (f"WebSearch is not allowed here: {NO_INTERNET}, and a web search isn't one of them. "
+                  "Work without it."),
+}
 _RULE = re.compile(r"^([A-Za-z0-9_.*-]+)(?:\((.*)\))?$", re.S)
 _SPLIT = re.compile(r"\s*(?:&&|\|\||;|\||\n)\s*")
 
@@ -190,6 +201,9 @@ class Broker:
             return self._approval(tool_name, tool_input)
         if any(rule_matches(rule, tool_name, tool_input, self.workdir) for rule in self.allow_rules):
             return {"behavior": "allow", "updatedInput": tool_input}
+        if tool_name in NETWORK_TOOLS:
+            self.sink.emit("note", text=f"Denied {tool_name}: {NO_INTERNET}.")
+            return {"behavior": "deny", "message": NETWORK_DENY[tool_name]}
         self.sink.emit("note", text=f"Denied {tool_name}: not allowed in cloud runs.")
         return {"behavior": "deny", "message": f"{tool_name} {DENY_SUFFIX}"}
 
