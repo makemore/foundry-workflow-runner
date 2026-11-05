@@ -67,6 +67,8 @@ settings don't already allow:
    run);
 3. a call allowed by the project's `.claude/settings.json` `permissions.allow` runs;
 4. anything else is denied: "not allowed in cloud runs; add it to permissions.allow or approvals.ask".
+   WebFetch and WebSearch say why instead: "no internet in cloud runs except the hosts the workflow allows"
+   (`egress`, with `WebFetch(domain:host)` in `permissions.allow` for WebFetch).
 
 `approvals.ask` rules are also passed to Claude Code as `permissions.ask`, which wins over allow rules, so a
 matching call always reaches the tool. `.claude/settings.local.json` is ignored.

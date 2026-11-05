@@ -734,6 +734,31 @@ def test_permission_rules(rule, tool, tool_input, expected):
     assert rule_matches(rule, tool, tool_input, "/w") is expected
 
 
+def test_a_denied_web_fetch_or_search_says_theres_no_internet(tmp_path):
+    """Run 7483e70b (2026-11-05): "Denied WebFetch: not allowed in cloud runs." told nobody why. Network tools
+    say the run has no internet except the workflow's own hosts; an allowed host still goes through."""
+    from foundry_workflow_runner.permissions import Broker
+
+    notes = []
+    sink = type("Sink", (), {"emit": lambda self, kind, **fields: notes.append((kind, fields.get("text")))})()
+    (tmp_path / ".claude").mkdir()
+    (tmp_path / ".claude" / "settings.json").write_text(json.dumps(
+        {"permissions": {"allow": ["WebFetch(domain:api.example.com)"]}}))
+    broker = Broker(None, sink, lambda text: text, ask_rules=[], workdir=str(tmp_path), cancelled=None,
+                    deadline=0)
+    fetch = broker.decide("WebFetch", {"url": "https://example.com", "prompt": "title?"})
+    assert fetch["behavior"] == "deny"
+    assert "no internet in cloud runs except the hosts the workflow allows" in fetch["message"]
+    search = broker.decide("WebSearch", {"query": "x"})
+    assert search["behavior"] == "deny" and "no internet in cloud runs" in search["message"]
+    assert notes == [("note", "Denied WebFetch: no internet in cloud runs except the hosts the workflow allows."),
+                     ("note", "Denied WebSearch: no internet in cloud runs except the hosts the workflow allows.")]
+    allowed = broker.decide("WebFetch", {"url": "https://api.example.com/v1", "prompt": "p"})
+    assert allowed["behavior"] == "allow"
+    assert broker.decide("Write", {"file_path": str(tmp_path / "a")})["message"] == (
+        "Write is not allowed in cloud runs; add it to permissions.allow or approvals.ask.")
+
+
 def test_redactor_shapes_and_values():
     redact = Redactor(["supersecretvalue"])
     text = redact("a supersecretvalue b sk-ant-api03-xxxxxxxxxxxx c AKIAABCDEFGHIJKLMNOP password=hunter22! "
